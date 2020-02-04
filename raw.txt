@@ -1,0 +1,66 @@
+#Code by Simon Barthelme
+#Partially adapted from Alan Edelman's autodiff tutorial on JuliaBox
+
+#Define dual numbers
+struct D <: Number
+    a :: Float64
+    b :: Float64
+end
+
+#Overload standard operators
+import Base: +, /, *, convert, promote_rule
++(x::D, y::D) = D(x.a + y.a,x.b + y.b)
+*(x::D, y::D) = D(x.a*y.a,x.b*y.a + x.a*y.b)
+/(x::D, y::D) = D(x.a/y.a, (y.a*x.b - x.a*y.b)/y.a^2)
+
+
+#Method for converting real to dual
+convert(::Type{D}, x::Real) = D(x,0.0)
+#Promotion: what should the output of e.g., dual + float be? 
+promote_rule(::Type{D}, ::Type{<:Number}) = D
+
+#Accessors
+main(x::D) = x.a
+tangent(x::D) = x.b
+
+#Pretty-print
+import Base:show
+
+function show(io::IO,x::D)
+    if (tangent(x) > 0)
+        println(io,"$(main(x)) + $(tangent(x))ϵ")
+    else
+        println(io,"$(main(x)) - $(-tangent(x))ϵ")
+    end
+end
+
+#Check arithmetic on duals
+x = D(.5,-1)
+y = D(2,3)
+x+y
+x*y
+#Some things just magically follow from the rules we defined
+(x^3)*(y^(-2))
+
+#We can now compute derivatives of rational functions
+f = (x) -> x^5+1/x + 3
+dfdx_manual = (x) -> 5*x^4 - 1/(x^2)
+dfdx_auto = (x) -> tangent(f(D(x,1)))
+using Plots
+xv = LinRange(.1,3,100)
+plot(xv,dfdx_manual.(xv))
+plot!(xv,dfdx_auto.(xv))
+
+
+#We can expand the capabilities by defining rules for elementary functions
+import Base: sin, cos
+sin(x::D) = D(sin(x.a),cos(x.a)*x.b)
+cos(x::D) = D(cos(x.a),-sin(x.a)*x.b)
+
+f = (x) -> cos(1/x )
+dfdx_manual = (x) -> sin(1/x)*(x^(-2))
+dfdx_auto = (x) -> tangent(f(D(x,1)))
+plot(xv,dfdx_manual.(xv))
+plot!(xv,dfdx_auto.(xv))
+
+#As an exercise, try writing rules for exp, tan, etc. 
